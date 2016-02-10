@@ -108,12 +108,18 @@ class ContainerFactory extends Nette\Object
 	{
 		$key = md5(serialize(array($this->config, $this->configFiles, $this->class, $this->parentClass)));
 		$file = "$this->tempDirectory/$key.php";
+
+		$lock = NULL;
+		if (defined('PHP_WINDOWS_VERSION_BUILD') && ($lock = @fopen("$file.lock", 'c'))) { // @ - file may not exist
+			flock($lock, LOCK_SH);
+		}
+
 		if (!$this->isExpired($file) && (@include $file) !== FALSE) {
 			return;
 		}
 
-		$handle = fopen("$file.lock", 'c+');
-		if (!$handle || !flock($handle, LOCK_EX)) {
+		$lock = $lock ?: fopen("$file.lock", 'c');
+		if (!$lock || !flock($lock, LOCK_EX)) {
 			throw new Nette\IOException("Unable to acquire exclusive lock on '$file.lock'.");
 		}
 
@@ -134,7 +140,7 @@ class ContainerFactory extends Nette\Object
 		if ((@include $file) === FALSE) { // @ - error escalated to exception
 			throw new Nette\IOException("Unable to include '$file'.");
 		}
-		flock($handle, LOCK_UN);
+		flock($lock, LOCK_UN);
 	}
 
 
